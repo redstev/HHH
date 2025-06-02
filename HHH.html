@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hungry Hungry Hippies</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        canvas {
+            border: 1px solid #333;
+            background: #000;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        
+        Arrow Keys: Move player<br>
+        Eat the dots and avoid the hippies<br>
+        Can you get to level 6?
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game constants
+        let WIDTH = 800;
+        let HEIGHT = 600;
+        const ORIGINAL_WIDTH = 800;
+        const ORIGINAL_HEIGHT = 600;
+        const EDGE_BUFFER = 20;
+
+        // Colors
+        const BLACK = '#000000';
+        const WHITE = '#ffffff';
+        const PURPLE = '#800080';
+        const GREEN = '#00ff00';
+        const RED = '#ff0000';
+        const BLUE = '#0000ff';
+        const YELLOW = '#ffff00';
+
+        // Key states
+        const keys = {
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+
+        class Hippie {
+            constructor(x, y, speed) {
+                this.x = x;
+                this.y = y;
+                this.size = 30;
+                this.speed = speed;
+                this.direction = this.getRandomDirection();
+            }
+
+            getRandomDirection() {
+                const directions = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
+                return directions[Math.floor(Math.random() * directions.length)];
+            }
+
+            update() {
+                switch (this.direction) {
+                    case 'UP':
+                        this.y -= this.speed;
+                        break;
+                    case 'DOWN':
+                        this.y += this.speed;
+                        break;
+                    case 'LEFT':
+                        this.x -= this.speed;
+                        break;
+                    case 'RIGHT':
+                        this.x += this.speed;
+                        break;
+                }
+
+                // Change direction if hitting the edge
+                if (this.x < 0 || this.x + this.size > WIDTH || this.y < 0 || this.y + this.size > HEIGHT) {
+                    this.direction = this.getRandomDirection();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = PURPLE;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+
+            getBounds() {
+                return {
+                    x: this.x,
+                    y: this.y,
+                    width: this.size,
+                    height: this.size
+                };
+            }
+        }
+
+        class Snack {
+            constructor(x, y, isSpecial = false, isLife = false) {
+                this.x = x;
+                this.y = y;
+                this.size = 10;
+                this.isSpecial = isSpecial;
+                this.isLife = isLife;
+            }
+
+            draw() {
+                if (this.isLife) {
+                    ctx.fillStyle = RED;
+                } else if (this.isSpecial) {
+                    ctx.fillStyle = BLUE;
+                } else {
+                    ctx.fillStyle = GREEN;
+                }
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+
+            getBounds() {
+                return {
+                    x: this.x,
+                    y: this.y,
+                    width: this.size,
+                    height: this.size
+                };
+            }
+        }
+
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 20;
+                this.speed = 5;
+                this.isInvincible = false;
+                this.invincibilityTimer = 0;
+                this.flashTimer = 0;
+                this.lives = 2;
+            }
+
+            update() {
+                // Handle movement
+                if (keys.left) this.x -= this.speed;
+                if (keys.right) this.x += this.speed;
+                if (keys.up) this.y -= this.speed;
+                if (keys.down) this.y += this.speed;
+
+                // Keep player on screen
+                this.x = Math.max(0, Math.min(WIDTH - this.size, this.x));
+                this.y = Math.max(0, Math.min(HEIGHT - this.size, this.y));
+
+                // Handle invincibility
+                if (this.isInvincible) {
+                    const currentTime = Date.now();
+                    if (currentTime - this.invincibilityTimer > 2000) { // 2 seconds invincibility
+                        this.isInvincible = false;
+                    } else {
+                        this.flashTimer++;
+                    }
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = YELLOW;
+                
+                // Flash effect when invincible
+                if (this.isInvincible && this.flashTimer % 20 >= 10) {
+                    ctx.fillStyle = PURPLE;
+                }
+
+                ctx.beginPath();
+                ctx.arc(this.x + this.size / 2, this.y + this.size / 2, this.size / 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            grow() {
+                this.size += 1;
+            }
+
+            shrink() {
+                this.size = Math.max(10, Math.floor(this.size / 2));
+            }
+
+            startInvincibility() {
+                this.isInvincible = true;
+                this.invincibilityTimer = Date.now();
+                this.flashTimer = 0;
+            }
+
+            loseLife() {
+                if (this.lives > 0) {
+                    this.lives--;
+                    this.startInvincibility();
+                    return false; // Game continues
+                }
+                return true; // Game over
+            }
+
+            getBounds() {
+                return {
+                    x: this.x,
+                    y: this.y,
+                    width: this.size,
+                    height: this.size
+                };
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.resetGame();
+                this.gameState = 'playing'; // 'playing', 'gameOver', 'completed'
+                this.bindEvents();
+                this.gameLoop();
+            }
+
+            resetGame() {
+                this.level = 1;
+                this.maxLevel = 7;
+                this.score = 0;
+                this.player = new Player(WIDTH / 2, HEIGHT / 2);
+                this.hippies = [];
+                this.snacks = [];
+                this.gameState = 'playing';
+                this.setupLevel();
+            }
+
+            setupLevel() {
+                this.hippies = [];
+                this.snacks = [];
+
+                this.player.startInvincibility();
+
+                // Create hippies
+                const hippieSpeed = 3 + (this.level - 1) * 0.5;
+                const hippieCount = this.level < 6 ? 4 + this.level : 10;
+                
+                for (let i = 0; i < hippieCount; i++) {
+                    const hippie = new Hippie(
+                        Math.random() * WIDTH,
+                        Math.random() * HEIGHT,
+                        hippieSpeed
+                    );
+                    this.hippies.push(hippie);
+                }
+
+                // Create snacks
+                let snackCount;
+                if (this.level < 6) {
+                    snackCount = 10 + (this.level - 1) * 10;
+                } else if (this.level === 6) {
+                    snackCount = 100;
+                } else {
+                    snackCount = 250;
+                }
+
+                // Add extra life pickup in level 3
+                if (this.level === 3) {
+                    const lifeSnack = new Snack(
+                        Math.random() * (WIDTH - EDGE_BUFFER * 2 - 10) + EDGE_BUFFER,
+                        Math.random() * (HEIGHT - EDGE_BUFFER * 2 - 10) + EDGE_BUFFER,
+                        false,
+                        true
+                    );
+                    this.snacks.push(lifeSnack);
+                }
+
+                // Add regular snacks
+                for (let i = 0; i < snackCount; i++) {
+                    this.spawnSnack();
+                }
+
+                // Add special food for levels 5 and 6
+                if (this.level === 5 || this.level === 6) {
+                    this.spawnSnack(true);
+                }
+            }
+
+            spawnSnack(isSpecial = false) {
+                const x = Math.random() * (WIDTH - EDGE_BUFFER * 2 - 10) + EDGE_BUFFER;
+                const y = Math.random() * (HEIGHT - EDGE_BUFFER * 2 - 10) + EDGE_BUFFER;
+                const snack = new Snack(x, y, isSpecial);
+                this.snacks.push(snack);
+            }
+
+            bindEvents() {
+                document.addEventListener('keydown', (e) => {
+                    switch (e.key) {
+                        case 'ArrowLeft':
+                            keys.left = true;
+                            e.preventDefault();
+                            break;
+                        case 'ArrowRight':
+                            keys.right = true;
+                            e.preventDefault();
+                            break;
+                        case 'ArrowUp':
+                            keys.up = true;
+                            e.preventDefault();
+                            break;
+                        case 'ArrowDown':
+                            keys.down = true;
+                            e.preventDefault();
+                            break;
+                        case 'F11':
+                            this.toggleFullscreen();
+                            e.preventDefault();
+                            break;
+                        case 'h':
+                        case 'H':
+                            if (this.gameState === 'gameOver' || this.gameState === 'completed') {
+                                this.resetGame();
+                            }
+                            break;
+                    }
+                });
+
+                document.addEventListener('keyup', (e) => {
+                    switch (e.key) {
+                        case 'ArrowLeft':
+                            keys.left = false;
+                            break;
+                        case 'ArrowRight':
+                            keys.right = false;
+                            break;
+                        case 'ArrowUp':
+                            keys.up = false;
+                            break;
+                        case 'ArrowDown':
+                            keys.down = false;
+                            break;
+                    }
+                });
+            }
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    canvas.requestFullscreen().then(() => {
+                        WIDTH = window.innerWidth;
+                        HEIGHT = window.innerHeight;
+                        canvas.width = WIDTH;
+                        canvas.height = HEIGHT;
+                    });
+                } else {
+                    document.exitFullscreen().then(() => {
+                        WIDTH = ORIGINAL_WIDTH;
+                        HEIGHT = ORIGINAL_HEIGHT;
+                        canvas.width = WIDTH;
+                        canvas.height = HEIGHT;
+                    });
+                }
+            }
+
+            checkCollision(rect1, rect2) {
+                return rect1.x < rect2.x + rect2.width &&
+                       rect1.x + rect1.width > rect2.x &&
+                       rect1.y < rect2.y + rect2.height &&
+                       rect1.y + rect1.height > rect2.y;
+            }
+
+            update() {
+                if (this.gameState !== 'playing') return;
+
+                this.player.update();
+
+                // Update hippies
+                this.hippies.forEach(hippie => hippie.update());
+
+                // Check snack collisions
+                const playerBounds = this.player.getBounds();
+                for (let i = this.snacks.length - 1; i >= 0; i--) {
+                    const snack = this.snacks[i];
+                    if (this.checkCollision(playerBounds, snack.getBounds())) {
+                        if (snack.isLife) {
+                            this.player.lives++;
+                            this.score += 10;
+                        } else if (snack.isSpecial) {
+                            this.player.shrink();
+                            this.score += 5;
+                        } else {
+                            this.player.grow();
+                            this.score += 1;
+                        }
+                        this.snacks.splice(i, 1);
+                    }
+                }
+
+                // Check hippie collisions
+                if (!this.player.isInvincible) {
+                    for (const hippie of this.hippies) {
+                        if (this.checkCollision(playerBounds, hippie.getBounds())) {
+                            const gameOver = this.player.loseLife();
+                            if (gameOver) {
+                                this.gameState = 'gameOver';
+                                return;
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Check if level complete
+                if (this.snacks.length === 0) {
+                    this.level++;
+                    if (this.level > this.maxLevel) {
+                        this.gameState = 'completed';
+                    } else {
+                        this.setupLevel();
+                    }
+                }
+            }
+
+            drawUI() {
+                ctx.fillStyle = WHITE;
+                ctx.font = '24px Arial';
+                ctx.fillText(`Score: ${this.score}`, 10, 30);
+                ctx.fillText(`Level: ${this.level}`, WIDTH - 100, 30);
+
+                // Draw lives
+                ctx.fillStyle = RED;
+                for (let i = 0; i < this.player.lives; i++) {
+                    ctx.beginPath();
+                    ctx.arc(20 + i * 30, 60, 10, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+
+            drawGameOverScreen() {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+                ctx.fillStyle = WHITE;
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                
+                if (this.gameState === 'completed') {
+                    ctx.fillText('YOU ARE FULL OF IT', WIDTH / 2, HEIGHT / 2 - 50);
+                } else {
+                    ctx.fillText('GAME OVER', WIDTH / 2, HEIGHT / 2 - 50);
+                }
+
+                ctx.font = '24px Arial';
+                ctx.fillText(`Final Score: ${this.score}`, WIDTH / 2, HEIGHT / 2 + 20);
+                ctx.fillText('Press (H)ungry to play again', WIDTH / 2, HEIGHT / 2 + 70);
+                ctx.textAlign = 'left';
+            }
+
+            draw() {
+                ctx.fillStyle = BLACK;
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+                if (this.gameState === 'playing') {
+                    // Draw snacks
+                    this.snacks.forEach(snack => snack.draw());
+
+                    // Draw hippies
+                    this.hippies.forEach(hippie => hippie.draw());
+
+                    // Draw player
+                    this.player.draw();
+
+                    // Draw UI
+                    this.drawUI();
+                } else {
+                    this.drawGameOverScreen();
+                }
+            }
+
+            gameLoop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+
+        // Start the game
+        new Game();
+    </script>
+</body>
+</html>
